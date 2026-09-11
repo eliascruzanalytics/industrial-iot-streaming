@@ -171,9 +171,10 @@ def start_refined_stream():
     spark = SparkSession.builder \
         .appName("Industrial_IoT_Refined") \
         .config("spark.sql.session.timeZone", "UTC") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.0,org.postgresql:postgresql:42.6.0") \
         .master("local[*]") \
         .getOrCreate()
+
 
     spark.sparkContext.setLogLevel("WARN")
 

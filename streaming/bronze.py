@@ -33,9 +33,10 @@ def create_spark_session(app_name: str = "Industrial_IoT_Bronze") -> SparkSessio
     return SparkSession.builder \
         .appName(app_name) \
         .config("spark.sql.session.timeZone", "UTC") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.0") \
         .master("local[*]") \
         .getOrCreate()
+
 
 
 def process_bronze_stream(bootstrap_servers: str = "localhost:9092", topic: str = "iot-machine-events", output_path: str = "data/bronze"):
