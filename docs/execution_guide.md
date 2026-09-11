@@ -121,9 +121,14 @@ O PySpark irá:
 
 No quinto terminal, consulte os dados analíticos persistidos no PostgreSQL:
 
-```bash
+```powershell
+# No PowerShell (Windows):
+Get-Content database/queries.sql | docker exec -i iot_postgres psql -U iot_user -d iot_db
+
+# Ou via volume do container (após subir com o docker-compose.yml atualizado):
 docker exec -it iot_postgres psql -U iot_user -d iot_db -f /database/queries.sql
 ```
+
 
 Você verá o resultado de 9 consultas SQL respondendo a perguntas de negócio (máquinas críticas, maiores temperaturas, médias de vibração, distribuição de anomalias).
 
@@ -166,3 +171,34 @@ Para encerrar e remover todos os volumes/dados salvos:
 ```bash
 docker compose down -v
 ```
+
+---
+
+## 6. Como Verificar o Uso do Protocolo MQTT
+
+Para monitorar e validar o protocolo MQTT (QoS 1) em execução no ambiente:
+
+1. **Subscrição em Tempo Real via `mosquitto_sub`**:
+   Exibe as mensagens JSON e tópicos trafegando ao vivo no broker Mosquitto:
+   ```bash
+   docker exec -it iot_mosquitto mosquitto_sub -h localhost -p 1883 -t "industrial/machines/+/telemetry" -v
+   ```
+
+2. **Logs do Broker Eclipse Mosquitto**:
+   Acompanhe conexões de clientes IoT, assinaturas e estatísticas de pacotes:
+   ```bash
+   docker logs -f iot_mosquitto
+   ```
+
+3. **Logs do Bridge MQTT → Kafka (`bridge/mqtt_to_kafka.py`)**:
+   Verifique o consumo das mensagens MQTT e publicação no Kafka:
+   ```bash
+   python bridge/mqtt_to_kafka.py
+   ```
+
+4. **Testes Automatizados da Camada MQTT**:
+   Execute apenas a suíte de testes do bridge MQTT:
+   ```bash
+   pytest tests/test_mqtt_bridge.py -v
+   ```
+
