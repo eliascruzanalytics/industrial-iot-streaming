@@ -1,0 +1,21 @@
+# Environments
+.env
+.venv/
+venv/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest & IDEs
+.pytest_cache/
+.vscode/
+.idea/
+
+# Data outputs & logs
+data/
+*.log
+*.parquet
+checkpoint/
