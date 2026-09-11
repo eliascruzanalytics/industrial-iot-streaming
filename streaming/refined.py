@@ -150,3 +150,53 @@ def process_end_to_end_batch(df: DataFrame, epoch_id: int):
             logger.info("Successfully wrote micro-batch to PostgreSQL table 'refined_machine_measurements'.")
         except Exception as pg_err:
             logger.error(f"Could not write batch to PostgreSQL JDBC: {pg_err}")
+
+
+def start_refined_stream():
+    """Initializes Spark Session, reads Kafka stream, and executes end-to-end refined pipeline."""
+    kafka_host = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    kafka_topic = os.getenv("KAFKA_TOPIC", "iot-machine-events")
+
+    spark = SparkSession.builder \
+        .appName("Industrial_IoT_Refined") \
+        .config("spark.sql.session.timeZone", "UTC") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0") \
+        .master("local[*]") \
+        .getOrCreate()
+
+    spark.sparkContext.setLogLevel("WARN")
+
+    logger.info(f"[SPARK] Starting Refined Streaming engine from Kafka topic '{kafka_topic}' at {kafka_host}")
+
+    raw_kafka_df = spark.readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", kafka_host) \
+        .option("subscribe", kafka_topic) \
+        .option("startingOffsets", "earliest") \
+        .load()
+
+    parsed_df = raw_kafka_df \
+        .selectExpr("CAST(value AS STRING) as json_payload", "timestamp as kafka_timestamp") \
+        .select(
+            F.from_json(F.col("json_payload"), IOT_EVENT_SCHEMA).alias("data"),
+            F.col("kafka_timestamp")
+        ) \
+        .select("data.*", "kafka_timestamp") \
+        .withColumn("ingestion_timestamp", F.current_timestamp())
+
+    checkpoint_dir = os.path.join("checkpoint", "refined")
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    logger.info("[SPARK] Starting foreachBatch streaming query...")
+    query = parsed_df.writeStream \
+        .foreachBatch(process_end_to_end_batch) \
+        .option("checkpointLocation", checkpoint_dir) \
+        .start()
+
+    logger.info("[SPARK] Streaming engine is active and waiting for events...")
+    query.awaitTermination()
+
+
+if __name__ == "__main__":
+    start_refined_stream()
+
