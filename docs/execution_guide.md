@@ -132,6 +132,33 @@ docker exec -it iot_postgres psql -U iot_user -d iot_db -f /database/queries.sql
 
 Você verá o resultado de 9 consultas SQL respondendo a perguntas de negócio (máquinas críticas, maiores temperaturas, médias de vibração, distribuição de anomalias).
 
+#### Consultar Eventos Específicos por `event_id` ou Métricas no PostgreSQL
+
+Para localizar uma mensagem/evento específico no banco de dados (exemplo: `event_id` = `'evt-4ebdc4f0'`):
+
+1. **Buscar por `event_id` (Chave Primária)**:
+   ```sql
+   SELECT * FROM refined_machine_measurements WHERE event_id = 'evt-4ebdc4f0';
+   ```
+   *Via Terminal PowerShell*:
+   ```powershell
+   docker exec -it iot_postgres psql -U iot_user -d iot_db -c "SELECT * FROM refined_machine_measurements WHERE event_id = 'evt-4ebdc4f0';"
+   ```
+
+2. **Buscar por Dispositivo (`device_id`) e Horário Exato**:
+   ```sql
+   SELECT event_id, device_id, event_timestamp, temperature, pressure, anomaly_level 
+   FROM refined_machine_measurements 
+   WHERE device_id = 'MTR-001' AND event_timestamp = '2026-09-11 19:41:44.862255+00';
+   ```
+
+3. **Buscar por Medições de Temperatura e Pressão**:
+   ```sql
+   SELECT * FROM refined_machine_measurements 
+   WHERE device_id = 'MTR-001' AND temperature = 61.5 AND pressure = 4.8;
+   ```
+
+
 ---
 
 ## 4. Como Executar os Testes Automatizados
