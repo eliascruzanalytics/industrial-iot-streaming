@@ -3,6 +3,17 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Windows PySpark HADOOP_HOME setup to prevent FileNotFoundException
+if sys.platform.startswith("win"):
+    hadoop_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".hadoop"))
+    bin_dir = os.path.join(hadoop_dir, "bin")
+    os.makedirs(bin_dir, exist_ok=True)
+    winutils_file = os.path.join(bin_dir, "winutils.exe")
+    if not os.path.exists(winutils_file):
+        open(winutils_file, "a").close()
+    os.environ["HADOOP_HOME"] = hadoop_dir
+
+
 import logging
 from typing import Dict, Any
 from pyspark.sql import SparkSession, DataFrame
