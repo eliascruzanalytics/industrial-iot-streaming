@@ -20,4 +20,7 @@ data/
 *.parquet
 checkpoint/
 .hadoop/
+.hadoop_home/
+.hadoop_win/
+
 

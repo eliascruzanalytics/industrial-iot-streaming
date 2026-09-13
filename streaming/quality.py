@@ -65,7 +65,7 @@ def apply_data_quality_spark(df: DataFrame) -> DataFrame:
         F.col("pressure").isNotNull() & (F.col("pressure") >= 0.0) &
         F.col("vibration").isNotNull() & (F.col("vibration") >= 0.0) &
         F.col("rpm").isNotNull() & (F.col("rpm") >= 0) &
-        F.col("status").isIn("RUNNING", "STOPPED", "MAINTENANCE", "FAILURE")
+        F.col("status").isin("RUNNING", "STOPPED", "MAINTENANCE", "FAILURE")
     )
     
     error_reasons = F.concat_ws(", ",
@@ -76,7 +76,7 @@ def apply_data_quality_spark(df: DataFrame) -> DataFrame:
         F.when(F.col("pressure").isNull() | (F.col("pressure") < 0.0), F.lit("pressure_negative")),
         F.when(F.col("vibration").isNull() | (F.col("vibration") < 0.0), F.lit("vibration_negative")),
         F.when(F.col("rpm").isNull() | (F.col("rpm") < 0), F.lit("rpm_negative")),
-        F.when(~F.col("status").isIn("RUNNING", "STOPPED", "MAINTENANCE", "FAILURE"), F.lit("invalid_status"))
+        F.when(~F.col("status").isin("RUNNING", "STOPPED", "MAINTENANCE", "FAILURE"), F.lit("invalid_status"))
     )
 
     return df.withColumn("is_valid", quality_conditions) \

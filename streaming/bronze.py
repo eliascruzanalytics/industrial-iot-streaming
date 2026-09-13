@@ -3,19 +3,46 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Windows PySpark HADOOP_HOME setup to prevent FileNotFoundException
+# Windows PySpark HADOOP_HOME & Java setup to prevent FileNotFoundException and Java 21+ getSubject Exception
 if sys.platform.startswith("win"):
-    hadoop_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".hadoop"))
+    # Fix PySpark Java 21+ incompatibility by prioritizing Java 8/11/17 if installed
+    for java_candidate in [
+        r"C:\Program Files\Java\jre1.8.0_491",
+        r"C:\Program Files\Java\jdk1.8.0",
+        r"C:\Program Files\Java\jdk-17",
+        r"C:\Program Files\Java\jdk-11",
+    ]:
+        if os.path.exists(java_candidate):
+            os.environ["JAVA_HOME"] = java_candidate
+            os.environ["PATH"] = os.path.join(java_candidate, "bin") + os.pathsep + os.environ.get("PATH", "")
+            break
+
+    hadoop_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".hadoop_home"))
     bin_dir = os.path.join(hadoop_dir, "bin")
     os.makedirs(bin_dir, exist_ok=True)
-    winutils_file = os.path.join(bin_dir, "winutils.exe")
-    if not os.path.exists(winutils_file):
-        open(winutils_file, "a").close()
+    winutils_exe = os.path.join(bin_dir, "winutils.exe")
+    dll_file = os.path.join(bin_dir, "hadoop.dll")
+    if not os.path.exists(winutils_exe) or not os.path.exists(dll_file):
+        try:
+            import urllib.request
+            winutils_url = "https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.5/bin/winutils.exe"
+            dll_url = "https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.5/bin/hadoop.dll"
+            if not os.path.exists(winutils_exe):
+                urllib.request.urlretrieve(winutils_url, winutils_exe)
+            if not os.path.exists(dll_file):
+                urllib.request.urlretrieve(dll_url, dll_file)
+        except Exception:
+            pass
     os.environ["HADOOP_HOME"] = hadoop_dir
+    os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+
 
 import logging
+from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+
+load_dotenv()
 
 
 from streaming.schemas import IOT_EVENT_SCHEMA
@@ -33,9 +60,10 @@ def create_spark_session(app_name: str = "Industrial_IoT_Bronze") -> SparkSessio
     return SparkSession.builder \
         .appName(app_name) \
         .config("spark.sql.session.timeZone", "UTC") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.0") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0") \
         .master("local[*]") \
         .getOrCreate()
+
 
 
 

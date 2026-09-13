@@ -80,9 +80,18 @@ class MqttToKafkaBridge:
         self.mqtt_client.on_disconnect = self.on_mqtt_disconnect
         self.is_connected = False
 
-    def init_kafka(self):
-        """Lazy initialization of Kafka producer if not injected."""
+    def init_kafka(self, max_retries: int = 10, retry_interval: int = 3):
+        """Lazy initialization of Kafka producer with retry logic."""
         if not self.kafka_producer:
+            for attempt in range(1, max_retries + 1):
+                try:
+                    self.kafka_producer = create_kafka_producer(self.kafka_bootstrap)
+                    logger.info("[KAFKA] Producer initialized successfully.")
+                    return
+                except Exception as ex:
+                    logger.warning(f"[KAFKA] Connection attempt {attempt}/{max_retries} failed: {ex}. Retrying in {retry_interval}s...")
+                    time.sleep(retry_interval)
+            # Final attempt
             self.kafka_producer = create_kafka_producer(self.kafka_bootstrap)
 
     def on_mqtt_connect(self, client, userdata, flags, rc, properties=None):

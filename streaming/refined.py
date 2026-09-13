@@ -3,21 +3,49 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-# Windows PySpark HADOOP_HOME setup to prevent FileNotFoundException
+# Windows PySpark HADOOP_HOME & Java setup to prevent FileNotFoundException and Java 21+ getSubject Exception
 if sys.platform.startswith("win"):
-    hadoop_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".hadoop"))
+    # Fix PySpark Java 21+ incompatibility by prioritizing Java 8/11/17 if installed
+    for java_candidate in [
+        r"C:\Program Files\Java\jre1.8.0_491",
+        r"C:\Program Files\Java\jdk1.8.0",
+        r"C:\Program Files\Java\jdk-17",
+        r"C:\Program Files\Java\jdk-11",
+    ]:
+        if os.path.exists(java_candidate):
+            os.environ["JAVA_HOME"] = java_candidate
+            os.environ["PATH"] = os.path.join(java_candidate, "bin") + os.pathsep + os.environ.get("PATH", "")
+            break
+
+    hadoop_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".hadoop_home"))
     bin_dir = os.path.join(hadoop_dir, "bin")
     os.makedirs(bin_dir, exist_ok=True)
-    winutils_file = os.path.join(bin_dir, "winutils.exe")
-    if not os.path.exists(winutils_file):
-        open(winutils_file, "a").close()
+    winutils_exe = os.path.join(bin_dir, "winutils.exe")
+    dll_file = os.path.join(bin_dir, "hadoop.dll")
+    if not os.path.exists(winutils_exe) or not os.path.exists(dll_file):
+        try:
+            import urllib.request
+            winutils_url = "https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.5/bin/winutils.exe"
+            dll_url = "https://raw.githubusercontent.com/cdarlint/winutils/master/hadoop-3.3.5/bin/hadoop.dll"
+            if not os.path.exists(winutils_exe):
+                urllib.request.urlretrieve(winutils_url, winutils_exe)
+            if not os.path.exists(dll_file):
+                urllib.request.urlretrieve(dll_url, dll_file)
+        except Exception:
+            pass
     os.environ["HADOOP_HOME"] = hadoop_dir
+    os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+
 
 
 import logging
 from typing import Dict, Any
+from dotenv import load_dotenv
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql import functions as F
+from pyspark.sql.window import Window
+
+load_dotenv()
 
 from streaming.schemas import IOT_EVENT_SCHEMA
 from streaming.quality import apply_data_quality_spark
@@ -162,6 +190,67 @@ def process_end_to_end_batch(df: DataFrame, epoch_id: int):
         except Exception as pg_err:
             logger.error(f"Could not write batch to PostgreSQL JDBC: {pg_err}")
 
+        # Update refined_machine_current_status table with latest status per device
+        try:
+            update_postgres_current_status(final_refined_df, postgres_host, postgres_port, postgres_db, postgres_user, postgres_pass)
+        except Exception as status_err:
+            logger.error(f"Could not update refined_machine_current_status table: {status_err}")
+
+
+def update_postgres_current_status(refined_df: DataFrame, host: str, port: str, db: str, user: str, password: str):
+    """Upserts latest device telemetry status into refined_machine_current_status table."""
+    try:
+        import psycopg2
+        window_spec = Window.partitionBy("device_id").orderBy(F.col("event_timestamp").desc())
+        latest_per_device = refined_df.withColumn("rn", F.row_number().over(window_spec)) \
+                                      .filter(F.col("rn") == 1) \
+                                      .drop("rn")
+        device_records = [row.asDict() for row in latest_per_device.collect()]
+        if not device_records:
+            return
+
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            dbname=db,
+            user=user,
+            password=password
+        )
+        cur = conn.cursor()
+        upsert_sql = """
+            INSERT INTO refined_machine_current_status (
+                device_id, last_event_id, last_event_timestamp, temperature, pressure, vibration, rpm, machine_status, anomaly_level, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            ON CONFLICT (device_id) DO UPDATE SET
+                last_event_id = EXCLUDED.last_event_id,
+                last_event_timestamp = EXCLUDED.last_event_timestamp,
+                temperature = EXCLUDED.temperature,
+                pressure = EXCLUDED.pressure,
+                vibration = EXCLUDED.vibration,
+                rpm = EXCLUDED.rpm,
+                machine_status = EXCLUDED.machine_status,
+                anomaly_level = EXCLUDED.anomaly_level,
+                updated_at = NOW();
+        """
+        for r in device_records:
+            cur.execute(upsert_sql, (
+                r["device_id"],
+                r["event_id"],
+                r["event_timestamp"],
+                r["temperature"],
+                r["pressure"],
+                r["vibration"],
+                r["rpm"],
+                r["machine_status"],
+                r["anomaly_level"]
+            ))
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info(f"Successfully updated current status for {len(device_records)} devices in PostgreSQL table 'refined_machine_current_status'.")
+    except Exception as ex:
+        logger.error(f"Failed to update refined_machine_current_status in PostgreSQL: {ex}")
+
 
 def start_refined_stream():
     """Initializes Spark Session, reads Kafka stream, and executes end-to-end refined pipeline."""
@@ -171,9 +260,10 @@ def start_refined_stream():
     spark = SparkSession.builder \
         .appName("Industrial_IoT_Refined") \
         .config("spark.sql.session.timeZone", "UTC") \
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:3.5.0,org.postgresql:postgresql:42.6.0") \
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.6.0") \
         .master("local[*]") \
         .getOrCreate()
+
 
 
     spark.sparkContext.setLogLevel("WARN")

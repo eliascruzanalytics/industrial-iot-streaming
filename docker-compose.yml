@@ -50,6 +50,7 @@ services:
       context: .
       dockerfile: bridge/Dockerfile
     container_name: iot_mqtt_bridge
+    restart: on-failure
     depends_on:
       - mosquitto
       - kafka
