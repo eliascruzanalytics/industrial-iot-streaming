@@ -141,6 +141,20 @@ MQTT and Kafka serve different complementary purposes in modern data architectur
 
 ---
 
+## 5 Specialized Streaming Consumers
+
+The platform includes **5 specialized streaming consumers** under `consumers/`, operating with distinct Kafka consumer groups:
+
+1. **`AlertConsumer`** (`alert-consumer-group`): Real-time critical alerts and emergency notifications (`data/alerts/`).
+2. **`MetricsConsumer`** (`metrics-consumer-group`): Real-time operational metrics and moving window aggregations (`data/metrics/`).
+3. **`ArchiveConsumer`** (`archiver-consumer-group`): Data Lake Bronze/raw partitioned archive storage (`data/bronze/`).
+4. **`DlqConsumer`** (`dlq-consumer-group`): Data Quality & Quarantine (DLQ) error metrics monitoring (`data/quarantine/`).
+5. **`MaintenanceConsumer`** (`maintenance-consumer-group`): Equipment health scoring and predictive maintenance work orders (`data/maintenance/`).
+
+Detailed consumer documentation: [docs/consumers.md](file:///c:/Users/elias.cruz/Documents/PYTHON_PROJECT/io_stream/docs/consumers.md).
+
+---
+
 ## Execution Guide
 
 Detailed execution instructions are documented in [docs/execution_guide.md](file:///c:/Users/elias.cruz/Documents/PYTHON_PROJECT/io_stream/docs/execution_guide.md).
@@ -151,8 +165,9 @@ Detailed execution instructions are documented in [docs/execution_guide.md](file
 2. **IoT Simulator**: `python simulator/producer.py`
 3. **MQTT Bridge**: `python bridge/mqtt_to_kafka.py`
 4. **PySpark Engine**: `python streaming/refined.py`
-5. **PostgreSQL Queries**: `docker exec -it iot_postgres psql -U iot_user -d iot_db -f /database/queries.sql`
-6. **Unit Tests**: `pytest`
+5. **Multi-Consumer Suite**: `python consumers/run_all_consumers.py --consumer all`
+6. **PostgreSQL Queries**: `docker exec -it iot_postgres psql -U iot_user -d iot_db -f /database/queries.sql`
+7. **Unit Tests**: `pytest`
 
 ---
 
@@ -168,3 +183,4 @@ Detailed execution instructions are documented in [docs/execution_guide.md](file
 - [ ] MQTT retained messages analysis
 - [ ] MQTT topic partitioning strategy
 - [ ] Kafka Connect MQTT connector alternative
+
